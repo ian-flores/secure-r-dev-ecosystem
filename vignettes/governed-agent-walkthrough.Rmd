@@ -25,15 +25,15 @@ knitr::opts_chunk$set(
 )
 ```
 
-## The Problem
+## The problem
 
 Large language models are excellent at generating R code. Give one a dataset
-and a question -- "What is the median income by state?" -- and it will produce
-plausible `dplyr` pipelines on the first try. The trouble is what happens next.
-If you `eval(parse(text = ...))` that code in your own R session, the model
+and a question, "What is the median income by state?", and it will produce
+plausible `dplyr` pipelines on the first try. But if you
+`eval(parse(text = ...))` that code in your own R session, the model
 has full access to your file system, your network, and every secret in your
-environment variables. A single prompt injection -- buried in a CSV column name
-or a user's follow-up question -- can turn your helpful data analyst into an
+environment variables. A single prompt injection buried in a CSV column name
+or a user's follow-up question can turn your helpful data analyst into an
 exfiltration tool.
 
 The **secure-r-dev** ecosystem is seven R packages that solve this problem in
@@ -62,12 +62,12 @@ into a governed agent that is safe to point at real data.
     └──────────────┘                  └──────────────┘
 ```
 
-This tutorial builds a **data analyst agent** from scratch. By the end, you
-will have an agent that accepts natural-language questions about a dataset,
-generates R code to answer them, executes that code in a sandbox with
-guardrails, draws on documentation via RAG, and logs every step with
-full observability. Every code chunk runs without external API keys -- we
-mock the LLM chat so you can follow along on any machine.
+This tutorial builds a **data analyst agent** from scratch: an agent that
+accepts natural-language questions about a dataset, generates R code to answer
+them, executes that code in a sandbox with guardrails, draws on documentation
+via RAG, and logs every step with full observability. Every code chunk runs
+without external API keys; we mock the LLM chat so you can follow along on
+any machine.
 
 ## Setup
 
@@ -97,16 +97,16 @@ library(R6)
 ```
 
 
-## Layer 1: Safe Execution (securer + securetools)
+## Layer 1: safe execution (securer + securetools)
 
-The foundation of any governed agent is **isolation**. When an LLM generates
+A governed agent starts with isolation. When an LLM generates
 code, that code must run in a process where it cannot read `/etc/passwd`,
 call `system("curl ...")`, or modify files outside an allowed directory. In
 the secure-r-dev stack, `securer` provides this via a child R process
 connected over a Unix domain socket, optionally wrapped in an OS-level
 sandbox (macOS Seatbelt or Linux bubblewrap).
 
-But isolation alone is not enough. The agent needs *capabilities* -- the
+Isolation is necessary but not sufficient. The agent also needs *capabilities*: the
 ability to read data files, compute expressions, and write results. These
 capabilities are exposed as **tools**: functions registered in the parent
 process that the child can invoke by name. The child process pauses, sends
@@ -183,7 +183,7 @@ call `system()` or `readLines("/etc/passwd")`, the sandbox would block it.
 
 ### Session pools for production
 
-In a production setting -- a Shiny app or a Plumber API -- you do not want
+In a production setting (a Shiny app or a Plumber API) you do not want
 to pay the startup cost of a new R process on every request. A
 `SecureSessionPool` pre-warms multiple sessions and dispatches work to
 idle ones.
@@ -209,7 +209,7 @@ Dead sessions are automatically restarted, so the pool self-heals after
 crashes or timeouts.
 
 
-## Layer 2: Three Lines of Defense (secureguard)
+## Layer 2: three lines of defense (secureguard)
 
 Isolation keeps the host safe from the agent's code, but it does not
 protect the agent from malicious *input*. A prompt injection hiding in a
@@ -218,7 +218,7 @@ model's *output* might accidentally include PII or credentials found in the
 dataset. `secureguard` provides three composable defense layers: input
 guardrails, code guardrails, and output guardrails.
 
-### Input: Rejecting prompt injection
+### Input: rejecting prompt injection
 
 The first line of defense checks the user's question before it ever
 reaches the LLM.
@@ -240,7 +240,7 @@ cat("Reason:", unsafe@reason, "\n")
 ```
 
 The guard uses pattern matching against a curated library of injection
-techniques. No API call is required -- all analysis happens locally.
+techniques. No API call is required; all analysis happens locally.
 
 ### Code: AST analysis and complexity limits
 
@@ -272,7 +272,7 @@ simple <- run_guardrail(complexity_guard, "x <- mean(c(1, 2, 3))")
 cat("Simple code passes complexity check:", simple@pass, "\n")
 ```
 
-### Output: Redacting PII and secrets
+### Output: redacting PII and secrets
 
 The third layer scans the agent's response before it reaches the user.
 Even if the dataset contains social security numbers or API keys, the
@@ -341,7 +341,7 @@ guarded_session$close()
 ### Composing into a pipeline
 
 For production use, bundle all three layers into a `secure_pipeline()`.
-This gives you `$check_input()`, `$check_code()`, `$check_output()`, and
+This exposes `$check_input()`, `$check_code()`, `$check_output()`, and
 `$as_pre_execute_hook()` in a single object.
 
 ```{r secure-pipeline}
@@ -375,7 +375,7 @@ cat("Cleaned:", output_ok$result, "\n")
 ```
 
 
-## Layer 3: Knowledge and Context (securecontext)
+## Layer 3: knowledge and context (securecontext)
 
 A data analyst agent is only as useful as its knowledge of the dataset.
 Without context, the LLM has to guess column names, data types, and domain
@@ -448,7 +448,7 @@ print(results)
 
 ### Token-aware context assembly
 
-Retrieval gives you candidate chunks, but you still need to fit them into
+Retrieval produces candidate chunks, but you still need to fit them into
 a finite context window alongside the system prompt and conversation
 history. The `context_builder` assembles text by priority, stopping when
 the token budget is exhausted.
@@ -468,7 +468,7 @@ cat("Total tokens:", built$total_tokens, "\n")
 ```
 
 The highest-priority items (system prompt and data dictionary) are included
-first. If the budget runs out, lower-priority items are dropped -- but
+first. If the budget runs out, lower-priority items are dropped, but
 you know exactly which ones, so you can log the decision.
 
 ### Persistent knowledge store
@@ -488,7 +488,7 @@ cat("Quirk:", ks$get("dataset_quirk"), "\n")
 ```
 
 
-## Layer 4: Graph Orchestration (orchestr)
+## Layer 4: graph orchestration (orchestr)
 
 With safe execution, guardrails, and context retrieval in place, we need
 to wire them into a coherent workflow. `orchestr` provides graph-based
@@ -544,13 +544,13 @@ MockChat <- R6Class("MockChat",
 
 The data analyst workflow has seven steps, each a node in the graph:
 
-1. **input_guard** -- check the user's question for injection
-2. **retrieve_context** -- pull relevant documentation from the vector store
-3. **generate_code** -- ask the LLM to write R code (mocked)
-4. **code_guard** -- AST-analyze the generated code
-5. **execute** -- run the code in a sandboxed session
-6. **output_guard** -- redact PII/secrets from the result
-7. **respond** -- format the final answer
+1. **input_guard**: check the user's question for injection
+2. **retrieve_context**: pull relevant documentation from the vector store
+3. **generate_code**: ask the LLM to write R code (mocked)
+4. **code_guard**: AST-analyze the generated code
+5. **execute**: run the code in a sandboxed session
+6. **output_guard**: redact PII/secrets from the result
+7. **respond**: format the final answer
 
 ```{r build-graph}
 # Create the guardrail pipeline we will use inside nodes
@@ -722,11 +722,11 @@ cat("Format preference:", mem$get("preferred_format"), "\n")
 ```
 
 
-## Layer 5: Observability (securetrace)
+## Layer 5: observability (securetrace)
 
-A governed agent must be auditable. When something goes wrong -- a guardrail
-blocks a legitimate query, or the model generates incorrect code -- you need
-a trace that shows exactly what happened at each step. `securetrace`
+A governed agent must be auditable. When something goes wrong, whether a
+guardrail blocks a legitimate query or the model generates incorrect code,
+you need a trace that shows exactly what happened at each step. `securetrace`
 provides structured tracing with nested spans, token accounting, cost
 calculation, and export to JSONL, console, and Prometheus.
 
@@ -798,8 +798,8 @@ cat("Traced result:", traced_result, "\n")
 ### Token counting and cost accounting
 
 When you record tokens with `record_tokens()`, `securetrace` can calculate
-the cost using built-in pricing tables. This is critical for monitoring
-agent workloads in production.
+the cost using built-in pricing tables. This matters for monitoring agent
+workloads in production.
 
 ```{r cost-accounting}
 tr <- Trace$new("cost-demo")
@@ -857,13 +857,12 @@ cat(prom_output, "\n")
 ```
 
 
-## Layer 6: Evaluation (securebench)
+## Layer 6: evaluation (securebench)
 
-Guardrails are only as good as their accuracy. A guard that blocks
-every input has perfect recall but zero precision. A guard that passes
-everything has perfect precision but zero recall. `securebench` provides
-the tooling to measure this tradeoff rigorously, so you can tune your
-guards with confidence.
+A guardrail that blocks every input has perfect recall but zero precision.
+A guardrail that passes everything has perfect precision but zero recall.
+`securebench` measures this tradeoff, so you can tune your guards based
+on numbers rather than guesses.
 
 ### Benchmarking a single guardrail
 
@@ -944,11 +943,11 @@ print(confusion)
 ```
 
 
-## Full Workflow: The Production Agent
+## Full workflow: the production agent
 
 Here is the complete data analyst agent, wiring all seven packages together
 in a single traced, guarded, context-aware workflow. This is the code you
-would adapt for a production deployment -- replacing `MockChat` with
+would adapt for a production deployment, replacing `MockChat` with
 `ellmer::chat_openai()` or `ellmer::chat_anthropic()` and setting
 `sandbox = TRUE`.
 
@@ -1045,9 +1044,9 @@ cat("Trace exported:", length(trace_json), "entry(ies)\n")
 unlink(prod_trace_file)
 ```
 
-## What We Built
+## What we built
 
-This tutorial walked through every layer of the secure-r-dev ecosystem:
+The data analyst agent touches every layer of the secure-r-dev ecosystem:
 
 | Layer | Package(s) | What it does |
 |-------|-----------|--------------|
@@ -1058,12 +1057,11 @@ This tutorial walked through every layer of the secure-r-dev ecosystem:
 | Observability | securetrace | Structured traces, token/cost accounting, JSONL + Prometheus export |
 | Evaluation | securebench | Guardrail precision/recall/F1, configuration comparison |
 
-The key design principle is **defense in depth**. No single layer is
-sufficient on its own. The sandbox limits what code can do, but guardrails
-prevent dangerous code from being generated in the first place. Output
-filtering catches anything that slips through. Tracing ensures you can
-audit every decision after the fact. And benchmarking gives you confidence
-that your guards actually work.
+The key design principle is **defense in depth**. The sandbox limits what
+code can do, guardrails prevent dangerous code from being generated in the
+first place, and output filtering catches anything that slips through.
+Tracing lets you audit every decision after the fact. Benchmarking proves
+your guards actually work.
 
 To move from this tutorial to a production agent, you would:
 
