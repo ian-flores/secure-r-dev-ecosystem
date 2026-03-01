@@ -1,7 +1,17 @@
 ---
 title: "Building a Data Analyst Agent"
 subtitle: "A guided tour of the secure-r-dev ecosystem"
-output: rmarkdown::html_vignette
+output:
+  html_document:
+    toc: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: true
+    toc_depth: 3
+    theme: flatly
+    highlight: tango
+    code_folding: show
+    number_sections: true
 vignette: >
   %\VignetteIndexEntry{Building a Data Analyst Agent}
   %\VignetteEngine{knitr::rmarkdown}
