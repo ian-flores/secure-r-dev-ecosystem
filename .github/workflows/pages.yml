@@ -1,0 +1,121 @@
+name: Render Vignette and Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libcurl4-openssl-dev \
+            libxml2-dev \
+            libssl-dev \
+            libfontconfig1-dev \
+            libfreetype6-dev \
+            libpng-dev \
+            libtiff-dev \
+            libjpeg-dev \
+            libharfbuzz-dev \
+            libfribidi-dev \
+            pandoc
+
+      - name: Setup R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: "4.4"
+
+      - name: Install pak
+        run: |
+          Rscript -e 'install.packages("pak", repos = "https://r-lib.github.io/p/pak/stable/")'
+
+      - name: Install R dependencies
+        run: |
+          Rscript -e '
+            pak::pak(c(
+              "devtools",
+              "testthat",
+              "withr",
+              "R6",
+              "S7",
+              "cli",
+              "rlang",
+              "jsonlite",
+              "callr",
+              "processx",
+              "base64enc",
+              "openssl",
+              "rmarkdown",
+              "knitr"
+            ))
+          '
+
+      - name: Install ecosystem packages from GitHub
+        run: |
+          Rscript -e '
+            pak::pak(paste0("ian-flores/", c(
+              "securer",
+              "securetools",
+              "secureguard",
+              "securecontext",
+              "orchestr",
+              "securetrace",
+              "securebench"
+            )))
+          '
+
+      - name: Render vignette
+        run: |
+          mkdir -p docs
+          Rscript -e '
+            rmarkdown::render(
+              "vignettes/governed-agent-walkthrough.Rmd",
+              output_dir = "docs"
+            )
+          '
+
+      - name: Create index redirect
+        run: |
+          cp docs/governed-agent-walkthrough.html docs/index.html
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+
+    permissions:
+      pages: write
+      id-token: write
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
