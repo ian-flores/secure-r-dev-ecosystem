@@ -161,8 +161,9 @@ crosses the IPC boundary.
 
 ```{r execute-tool-call}
 result <- session$execute(sprintf('
-  # Read the dataset using the file tool (returns a data frame for CSVs)
-  data <- read_file(path = "%s/states.csv", format = "auto")
+  # Read the dataset using the file tool (returns a list of rows)
+  raw <- read_file(path = "%s/states.csv", format = "auto")
+  data <- do.call(rbind.data.frame, raw)
 
   # Use the calculator for a derived metric
   total_pop <- sum(data$population)
