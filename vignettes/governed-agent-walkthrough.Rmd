@@ -11,7 +11,7 @@ output:
     theme: flatly
     highlight: tango
     code_folding: show
-    number_sections: true
+    number_sections: false
 vignette: >
   %\VignetteIndexEntry{Building a Data Analyst Agent}
   %\VignetteEngine{knitr::rmarkdown}
@@ -835,15 +835,15 @@ trace_lines <- readLines(trace_file)
 cat("Exported", length(trace_lines), "trace(s) to JSONL\n")
 
 # Demonstrate log correlation
-with_trace("log-demo", {
+invisible(with_trace("log-demo", {
   with_span("inner-work", type = "custom", {
     with_trace_logging({
       message("This log line is automatically prefixed with trace context")
     })
   })
-})
+}))
 
-unlink(trace_file)
+invisible(unlink(trace_file))
 ```
 
 ### Prometheus metrics
