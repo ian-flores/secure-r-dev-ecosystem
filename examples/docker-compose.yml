@@ -1,0 +1,83 @@
+version: "3.9"
+
+services:
+  plumber-api:
+    build:
+      context: ..
+      dockerfile: examples/plumber/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - SECURER_SANDBOX_MODE=docker
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
+    read_only: true
+    tmpfs:
+      - /tmp:rw,exec,size=512m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    depends_on:
+      - jaeger
+    networks:
+      - examples-net
+
+  shiny-app:
+    build:
+      context: ..
+      dockerfile: examples/shiny/Dockerfile
+    ports:
+      - "3838:3838"
+    environment:
+      - SECURER_SANDBOX_MODE=docker
+      - PLUMBER_API_URL=http://plumber-api:8000
+    read_only: true
+    tmpfs:
+      - /tmp:rw,exec,size=512m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    depends_on:
+      - plumber-api
+    networks:
+      - examples-net
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.54
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    ports:
+      - "16686:16686"   # Jaeger UI
+      - "4318:4318"     # OTLP HTTP receiver
+    networks:
+      - examples-net
+
+  prometheus:
+    image: prom/prometheus:v2.50.1
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    networks:
+      - examples-net
+
+  grafana:
+    image: grafana/grafana:11.0.0
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=securetrace
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+    networks:
+      - examples-net
+
+networks:
+  examples-net:
+    driver: bridge
